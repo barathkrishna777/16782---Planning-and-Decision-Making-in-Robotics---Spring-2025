@@ -4,17 +4,13 @@
 #include <set>
 
 struct state {
-    int idx = -1;
-    int g = std::numeric_limits<int>::max();
-    int h = 0;
-    bool closed = false;
-    double w = 1;
-    struct CompareParents {
-        bool operator()(const state* a, const state* b) const {
-            return a->g < b->g;  // Sort parents in ascending order of g-value
-        }
-    };
-    std::set<state*, CompareParents> parents;
+    int idx;
+    int g;
+    int h;
+    bool closed;
+    state* parent;
+
+    state() : idx(-1), g(std::numeric_limits<int>::max()), h(0), closed(false), parent(nullptr) {}
 };
 
 inline int getx(int idx, int x_size) {
@@ -25,4 +21,8 @@ inline int getx(int idx, int x_size) {
 inline int gety(int idx, int x_size) {
     int y = idx/x_size + 1;
     return y;
+}
+
+inline int getidx(int x, int y, int x_size) {
+    return x-1 + (y-1)*x_size;
 }
