@@ -9,11 +9,9 @@
 #include "utils.h"
 #include <queue>
 #include <algorithm>
-#include <iostream>
 #include <chrono>
-#include <fstream>
-#include <sstream>
 #include <filesystem>
+#include <utilities.h>
 
 #define GETMAPINDEX(X, Y, XSIZE, YSIZE) ((Y-1)*XSIZE + (X-1))
 
@@ -31,33 +29,39 @@ int w = 1;
 
 struct CompareStatePtr {
     bool operator()(const state* a, const state* b) const {
-        return (a->g + w * a->h) > (b->g + w * b->h);
+        return (a->g + w*a->h) > (b->g + w*b->h);
     }
 };
 
 int find_closest_valid_goal(int* target_traj, int target_steps, int robotposeX, int robotposeY, int* map, int x_size, int y_size, int collision_thresh) {
-    int best_idx = -1;
-    int best_dist = INT_MAX;
+    int best_idx = 0;
+    int best_dist = std::numeric_limits<int>::max();
     int d = 1;
     int d_ = 1.4;
+    float safety_factor = 1;
     
     for (int i = 0; i < target_steps; ++i) {
         int x_target = target_traj[i];
-        int y_target = target_traj[i+target_steps];
+        int y_target = target_traj[i + target_steps];
         
         if (x_target >= 1 && x_target <= x_size && y_target >= 1 && y_target <= y_size) {
             int cost = map[GETMAPINDEX(x_target, y_target, x_size, y_size)];
+            
             if (cost < collision_thresh) {
-                int dist = d * std::max(abs(robotposeX - x_target), abs(robotposeY - y_target)) + (d_ - d) * std::min(abs(robotposeX - x_target), abs(robotposeY - y_target));
+                int dist = d * std::max(abs(robotposeX - x_target), abs(robotposeY - y_target)) 
+                         + (d_ - d) * std::min(abs(robotposeX - x_target), abs(robotposeY - y_target));
                 
-                if (dist < best_dist) {
-                    best_idx = i;
-                    best_dist = dist;
+                dist = static_cast<int>(dist * safety_factor);
+
+                if (dist < i) {
+                    if (dist < best_dist) {
+                        best_idx = i;
+                        best_dist = dist;
+                    }
                 }
             }
         }
     }
-    
     return best_idx;
 }
 
@@ -77,6 +81,20 @@ void planner(
     )
 {
     auto start_code = std::chrono::high_resolution_clock::now();
+
+    if (curr_time > 0) {
+        if (!loadNextPose(robotposeX, robotposeY, curr_time)) {
+            std::cerr << "Failed to load next pose! Using robot's current pose." << std::endl;
+            
+            action_ptr[0] = robotposeX;
+            action_ptr[1] = robotposeY;
+            return;
+        }
+        action_ptr[0] = robotposeX;
+        action_ptr[1] = robotposeY;
+        return;
+    }
+
     // 8-connected grid
     int dX[NUMOFDIRS] = {-1, -1, -1,  0,  0,  1, 1, 1};
     int dY[NUMOFDIRS] = {-1,  0,  1, -1,  1, -1, 0, 1};
@@ -120,14 +138,14 @@ void planner(
     std::priority_queue<state*, std::vector<state*>, CompareStatePtr> open;
     open.push(&first);
 
-    while (goal_state->closed == false) {
+    while (!open.empty()) {
         state* current = open.top();
         open.pop();
 
         int idx = current->idx;
 
-        if (getx(states[idx].idx, x_size) == goalposeX && gety(states[idx].idx, x_size) == goalposeY) {
-            // goal_state = &states[idx];
+        if (getx(current->idx, x_size) == goalposeX && gety(current->idx, x_size) == goalposeY) {
+            goal_state = current;
             break;
         }
 
@@ -146,7 +164,7 @@ void planner(
 
             double move_cost = (dX[dir] == 0 || dY[dir] == 0) ? d : d_;
             int new_g = current->g + move_cost + cost;
-            int new_h = d * std::max(abs(x_new - goalposeX), abs(y_new - goalposeY)) + (d_ - d) * std::min(abs(x_new - goalposeX), abs(y_new - goalposeY));
+            int new_h = d*std::max(abs(x_new-goalposeX), abs(y_new-goalposeY)) + (d_-d)*std::min(abs(x_new-goalposeX), abs(y_new-goalposeY));
 
             states[idx_new].idx = idx_new;
             states[idx_new].h = new_h;
@@ -154,6 +172,7 @@ void planner(
             if (states[idx_new].g > new_g) {
                 states[idx_new].g = new_g;
                 states[idx_new].parent = current;
+                states[idx_new].closed = false;
                 open.push(&states[idx_new]);
             }
         }
@@ -178,6 +197,8 @@ void planner(
         path.push(next->parent);
     }
 
+    savePathToFile(path, x_size);
+
     stop = std::chrono::high_resolution_clock::now();
     duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
     std::cout << "Path reconstruction time: " << duration.count() << " ms" << std::endl;
@@ -192,7 +213,7 @@ void planner(
     duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop_code - start_code);
     std::cout << "Total run time: " << duration.count() << " ms" << std::endl;
     start = std::chrono::high_resolution_clock::now();
-    
+
     return;
 }
 
