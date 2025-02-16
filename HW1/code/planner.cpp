@@ -24,7 +24,7 @@
 
 #define NUMOFDIRS 8
 
-int w = 1;
+int w = 5;
 
 struct CompareStatePtr {
     bool operator()(const state* a, const state* b) const {
@@ -33,13 +33,13 @@ struct CompareStatePtr {
 };
 
 int find_closest_valid_goal(int* target_traj, int target_steps, int robotposeX, int robotposeY, int* map, int x_size, int y_size, int collision_thresh) {
-    int best_idx = 0;
+    int best_idx = target_steps-1;
     int best_dist = std::numeric_limits<int>::max();
     int d = 1;
     int d_ = 1.4;
-    float safety_factor = 1;
+    float safety_factor = 1.5;
     
-    for (int i = 0; i < target_steps; ++i) {
+    for (int i = 2*target_steps/3; i < target_steps; ++i) {
         int x_target = target_traj[i];
         int y_target = target_traj[i + target_steps];
         
@@ -52,7 +52,7 @@ int find_closest_valid_goal(int* target_traj, int target_steps, int robotposeX, 
                 
                 dist = static_cast<int>(dist * safety_factor);
 
-                if (dist < i) {
+                if (dist < i+5) {
                     if (dist < best_dist) {
                         best_idx = i;
                         best_dist = dist;
@@ -121,7 +121,8 @@ void planner(
     state first;
     first.idx = getidx(robotposeX, robotposeY, x_size);
     first.g = 0;
-    first.h = d * std::max(abs(robotposeX - goalposeX), abs(robotposeY - goalposeY)) + (d_ - d) * std::min(abs(robotposeX - goalposeX), abs(robotposeY - goalposeY));
+    // first.h = d * std::max(abs(robotposeX - goalposeX), abs(robotposeY - goalposeY)) + (d_ - d) * std::min(abs(robotposeX - goalposeX), abs(robotposeY - goalposeY));
+    first.h = sqrt(pow(robotposeX - goalposeX, 2) + pow(robotposeY - goalposeY, 2));
     first.closed = false;
     states[first.idx] = first;
 
@@ -162,8 +163,10 @@ void planner(
                 continue;
 
             double move_cost = (dX[dir] == 0 || dY[dir] == 0) ? d : d_;
-            int new_g = current->g + move_cost + cost;
-            int new_h = d*std::max(abs(x_new-goalposeX), abs(y_new-goalposeY)) + (d_-d)*std::min(abs(x_new-goalposeX), abs(y_new-goalposeY));
+            // int new_g = current->g + move_cost + cost;
+            int new_g = current->g + cost;
+            // int new_h = d*std::max(abs(x_new-goalposeX), abs(y_new-goalposeY)) + (d_-d)*std::min(abs(x_new-goalposeX), abs(y_new-goalposeY));
+            int new_h = sqrt(pow(x_new-goalposeX, 2) + pow(y_new-goalposeY, 2));
 
             states[idx_new].idx = idx_new;
             states[idx_new].h = new_h;
