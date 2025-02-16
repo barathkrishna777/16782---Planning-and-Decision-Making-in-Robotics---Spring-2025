@@ -15,9 +15,9 @@ struct state {
     int g;
     int h;
     bool closed;
-    state* parent;
+    int idx_parent;
 
-    state() : idx(-1), g(std::numeric_limits<int>::max()), h(0), closed(false), parent(nullptr) {}
+    state() : idx(-1), g(std::numeric_limits<int>::max()), h(0), closed(false), idx_parent(-1) {}
 };
 
 inline int getx(int idx, int x_size) {
