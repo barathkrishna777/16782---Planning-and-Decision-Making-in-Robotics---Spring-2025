@@ -11,7 +11,6 @@
 #include <algorithm>
 #include <chrono>
 #include <filesystem>
-#include <utilities.h>
 
 #define GETMAPINDEX(X, Y, XSIZE, YSIZE) ((Y-1)*XSIZE + (X-1))
 
