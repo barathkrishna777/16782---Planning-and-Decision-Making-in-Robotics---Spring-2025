@@ -24,7 +24,7 @@
 
 #define NUMOFDIRS 8
 
-int w = 5;
+int w = 1;
 
 struct CompareStatePtr {
     bool operator()(const state* a, const state* b) const {
@@ -52,7 +52,7 @@ int find_closest_valid_goal(int* target_traj, int target_steps, int robotposeX, 
                 
                 dist = static_cast<int>(dist * safety_factor);
 
-                if (dist < i+5) {
+                if (dist < i+10) {
                     if (dist < best_dist) {
                         best_idx = i;
                         best_dist = dist;
@@ -62,6 +62,99 @@ int find_closest_valid_goal(int* target_traj, int target_steps, int robotposeX, 
         }
     }
     return best_idx;
+}
+
+#include <iostream>
+#include <vector>
+#include <queue>
+#include <limits>
+#include <chrono>
+
+struct state {
+    int idx;
+    int g;
+    int h;
+    bool closed;
+    state* parent;
+};
+
+// Custom comparison function for priority queue
+struct CompareStatePtr {
+    bool operator()(const state* a, const state* b) {
+        return (a->g + a->h) > (b->g + b->h); // Min-heap for A*
+    }
+};
+
+// Direction vectors for 8-connected movement
+const int dX[8] = {-1, -1, -1,  0, 0, 1, 1, 1};
+const int dY[8] = {-1,  0,  1, -1, 1, -1, 0, 1};
+const int NUMOFDIRS = 8;
+
+// Movement costs
+const int d = 1;
+const int d_ = 1.414;  // Approximate sqrt(2)
+
+// Utility functions
+inline int getidx(int x, int y, int x_size) {
+    return y * x_size + x;
+}
+
+inline int getx(int idx, int x_size) {
+    return idx % x_size;
+}
+
+inline int gety(int idx, int x_size) {
+    return idx / x_size;
+}
+
+// Compute heuristic map using Backward A*
+void compute_heuristic_map(int goalX, int goalY, const int* map, int x_size, int y_size, int collision_thresh, std::vector<state>& states_original) {
+    std::priority_queue<state*, std::vector<state*>, CompareStatePtr> open;
+    std::vector<state> states(x_size * y_size);
+
+    int goal_idx = getidx(goalX, goalY, x_size);
+    state& goal = states[goal_idx];
+    goal.idx = goal_idx;
+    goal.g = 0;
+    goal.h = 0;
+    goal.closed = false;
+    open.push(&goal);
+
+    while (!open.empty()) {
+        state* current = open.top();
+        open.pop();
+
+        int idx = current->idx;
+        int x = getx(idx, x_size);
+        int y = gety(idx, x_size);
+
+        for (int dir = 0; dir < NUMOFDIRS; ++dir) {
+            int x_new = x + dX[dir];
+            int y_new = y + dY[dir];
+
+            if (x_new < 0 || x_new >= x_size || y_new < 0 || y_new >= y_size)
+                continue;
+
+            int idx_new = getidx(x_new, y_new, x_size);
+            int cost = int(map[GETMAPINDEX(x_new, y_new, x_size, y_size)]);
+            if (states[idx_new].closed || cost)
+                continue;
+
+            double move_cost = (dX[dir] == 0 || dY[dir] == 0) ? d : d_;
+            int new_g = current->g + move_cost + cost;
+
+            if (states[idx_new].g > new_g || states[idx_new].g == std::numeric_limits<int>::max()) {
+                states[idx_new].idx = idx_new;
+                states[idx_new].g = new_g;
+                states[idx_new].h = 0;
+                states[idx_new].parent = current;
+                states[idx_new].closed = false;
+                open.push(&states[idx_new]);
+            }
+        }
+        states[idx].closed = true;
+        states_original[idx].h = current->g;
+    }
 }
 
 void planner(
@@ -110,6 +203,8 @@ void planner(
     
     std::vector<state> states;
     states.resize(x_size*y_size);
+
+    compute_heuristic_map(goalposeX, goalposeY, map, x_size, y_size, collision_thresh, states);
     
     auto start = std::chrono::high_resolution_clock::now();
     
@@ -121,8 +216,8 @@ void planner(
     state first;
     first.idx = getidx(robotposeX, robotposeY, x_size);
     first.g = 0;
-    // first.h = d * std::max(abs(robotposeX - goalposeX), abs(robotposeY - goalposeY)) + (d_ - d) * std::min(abs(robotposeX - goalposeX), abs(robotposeY - goalposeY));
-    first.h = sqrt(pow(robotposeX - goalposeX, 2) + pow(robotposeY - goalposeY, 2));
+    first.h = d * std::max(abs(robotposeX - goalposeX), abs(robotposeY - goalposeY)) + (d_ - d) * std::min(abs(robotposeX - goalposeX), abs(robotposeY - goalposeY));
+    // first.h = sqrt(pow(robotposeX - goalposeX, 2) + pow(robotposeY - goalposeY, 2));
     first.closed = false;
     states[first.idx] = first;
 
@@ -144,10 +239,10 @@ void planner(
 
         int idx = current->idx;
 
-        if (getx(current->idx, x_size) == goalposeX && gety(current->idx, x_size) == goalposeY) {
-            goal_state = current;
-            break;
-        }
+        // if (getx(current->idx, x_size) == goalposeX && gety(current->idx, x_size) == goalposeY) {
+        //     goal_state = current;
+        //     break;
+        // }
 
         for (int dir = 0; dir < NUMOFDIRS; ++dir) {
             int x_new = getx(idx, x_size) + dX[dir];
@@ -165,13 +260,10 @@ void planner(
             double move_cost = (dX[dir] == 0 || dY[dir] == 0) ? d : d_;
             // int new_g = current->g + move_cost + cost;
             int new_g = current->g + cost;
-            // int new_h = d*std::max(abs(x_new-goalposeX), abs(y_new-goalposeY)) + (d_-d)*std::min(abs(x_new-goalposeX), abs(y_new-goalposeY));
-            int new_h = sqrt(pow(x_new-goalposeX, 2) + pow(y_new-goalposeY, 2));
 
             states[idx_new].idx = idx_new;
-            states[idx_new].h = new_h;
 
-            if (states[idx_new].g > new_g) {
+            if (states[idx_new].g > new_g || states[idx_new].g == std::numeric_limits<int>::max()) {
                 states[idx_new].g = new_g;
                 states[idx_new].parent = current;
                 states[idx_new].closed = false;
