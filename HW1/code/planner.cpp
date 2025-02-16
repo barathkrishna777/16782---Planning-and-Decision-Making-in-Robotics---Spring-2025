@@ -32,37 +32,37 @@ struct CompareStatePtr {
     }
 };
 
-int find_closest_valid_goal(int* target_traj, int target_steps, int robotposeX, int robotposeY, int* map, int x_size, int y_size, int collision_thresh) {
-    int best_idx = 0;
-    int best_dist = std::numeric_limits<int>::max();
-    int d = 1;
-    int d_ = 1.4;
-    float safety_factor = 1.4;
+// int find_closest_valid_goal(int* target_traj, int target_steps, int robotposeX, int robotposeY, int* map, int x_size, int y_size, int collision_thresh) {
+//     int best_idx = 0;
+//     int best_dist = std::numeric_limits<int>::max();
+//     int d = 1;
+//     int d_ = 1.4;
+//     float safety_factor = 1.4;
     
-    for (int i = 0; i < target_steps; ++i) {
-        int x_target = target_traj[i];
-        int y_target = target_traj[i + target_steps];
+//     for (int i = 0; i < target_steps; ++i) {
+//         int x_target = target_traj[i];
+//         int y_target = target_traj[i + target_steps];
         
-        if (x_target >= 1 && x_target <= x_size && y_target >= 1 && y_target <= y_size) {
-            int cost = map[GETMAPINDEX(x_target, y_target, x_size, y_size)];
+//         if (x_target >= 1 && x_target <= x_size && y_target >= 1 && y_target <= y_size) {
+//             int cost = map[GETMAPINDEX(x_target, y_target, x_size, y_size)];
             
-            if (cost < collision_thresh) {
-                int dist = d * std::max(abs(robotposeX - x_target), abs(robotposeY - y_target)) 
-                         + (d_ - d) * std::min(abs(robotposeX - x_target), abs(robotposeY - y_target));
+//             if (cost < collision_thresh) {
+//                 int dist = d * std::max(abs(robotposeX - x_target), abs(robotposeY - y_target)) 
+//                          + (d_ - d) * std::min(abs(robotposeX - x_target), abs(robotposeY - y_target));
                 
-                dist = static_cast<int>(dist * safety_factor);
+//                 dist = static_cast<int>(dist * safety_factor);
 
-                if (dist < i) {
-                    if (dist < dist) {
-                        best_idx = i;
-                        best_dist = dist;
-                    }
-                }
-            }
-        }
-    }
-    return best_idx;
-}
+//                 if (dist < i) {
+//                     if (dist < dist) {
+//                         best_idx = i;
+//                         best_dist = dist;
+//                     }
+//                 }
+//             }
+//         }
+//     }
+//     return best_idx;
+// }
 
 void planner(
     int* map,
@@ -81,7 +81,6 @@ void planner(
 {
     auto start_code = std::chrono::high_resolution_clock::now();
 
-    std::queue<state*> best_path;
     int robotposeX_, robotposeY_;
 
     if(curr_time == 0) {
@@ -94,7 +93,7 @@ void planner(
         
         int shortest_path_length = std::numeric_limits<int>::max();
 
-        for(int idx_target = 0; idx_target < target_steps; ++idx_target) {
+        for(int idx_target = target_steps/2; idx_target < target_steps; ++idx_target) {
             
             int goalposeX = target_traj[idx_target];
             int goalposeY = target_traj[idx_target+target_steps];
@@ -162,28 +161,22 @@ void planner(
                 states[idx].closed = true;
             }
 
-            std::stack<state*> reversed_path;
+            std::queue<state*> reversed_path;
             reversed_path.push(goal_state);
             state* next = goal_state;
 
-            while (reversed_path.top()->idx_parent != first.idx) {
-                next = reversed_path.top();
+            while (reversed_path.back()->idx_parent != first.idx) {
+                next = reversed_path.back();
                 reversed_path.push(&states[next->idx_parent]);
             }
 
-            if(reversed_path.size() <= (target_steps-(idx_target)) && reversed_path.size() < shortest_path_length) {
+            // if(reversed_path.size() <= (target_steps-(idx_target)) && reversed_path.size() < shortest_path_length) {
+            if(reversed_path.size() <= (idx_target+5) && reversed_path.size() < shortest_path_length) {
                 shortest_path_length = reversed_path.size();
-                next = reversed_path.top();
+                next = reversed_path.back();
                 robotposeX_ = getx(next->idx, x_size);
                 robotposeY_ = gety(next->idx, x_size);  
-                
-                while (!best_path.empty()) {
-                    best_path.pop();
-                }
-                while (!reversed_path.empty()) {
-                    best_path.push(reversed_path.top());
-                    reversed_path.pop();
-                }
+                savePathToFile(reversed_path, x_size);
             }
         }
     }
@@ -203,8 +196,6 @@ void planner(
         
         return;
     }
-
-    savePathToFile(best_path, x_size);
 
     robotposeX = robotposeX_;
     robotposeY = robotposeY_;
