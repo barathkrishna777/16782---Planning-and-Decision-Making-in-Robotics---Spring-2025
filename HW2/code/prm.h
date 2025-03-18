@@ -111,8 +111,6 @@ public:
         q_init.id = num_nodes;
         q_goal.id = num_nodes + 1;
 
-        std::cout << "Start ID: " << q_init.id << ", Goal ID: " << q_goal.id << ", num_nodes: " << num_nodes << std::endl;
-
         q_init.g = 0;
 
         graph.emplace_back(std::move(q_init));
@@ -189,7 +187,6 @@ public:
     
         // If no path to goal was found
         if (graph[q_goal_ID].g == std::numeric_limits<double>::infinity()) {
-            std::cout << "Goal ID: " << graph[q_goal_ID].id << ", " << q_goal_ID << std::endl;
             std::cout << "No path found to the goal node." << std::endl;
             return {};
         }

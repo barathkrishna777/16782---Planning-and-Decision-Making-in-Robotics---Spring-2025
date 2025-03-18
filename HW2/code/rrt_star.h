@@ -227,8 +227,6 @@ public:
         node n;
         n.angles.assign(armgoal_anglesV_rad, armgoal_anglesV_rad + numofDOFs);
         // int q_goal_ID = nearest_neighbor(tree, n);
-
-        std::cout << "Goal ID: " << goal_id << std::endl;
     
         if (tree[goal_id].g == std::numeric_limits<double>::infinity()) {
             std::cout << "No path found to the goal node." << std::endl;

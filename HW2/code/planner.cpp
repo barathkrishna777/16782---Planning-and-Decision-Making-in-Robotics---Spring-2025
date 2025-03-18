@@ -24,51 +24,6 @@
 #define	PLAN_OUT	plhs[0]
 #define	PLANLENGTH_OUT	plhs[1]
 
-
-// static void planner(
-// 			double* map,
-// 			int x_size,
-// 			int y_size,
-// 			double* armstart_anglesV_rad,
-// 			double* armgoal_anglesV_rad,
-//             int numofDOFs,
-//             double*** plan,
-//             int* planlength)
-// {
-// 	//no plan by default
-// 	*plan = NULL;
-// 	*planlength = 0;
-		
-//     //for now just do straight interpolation between start and goal checking for the validity of samples
-
-//     double distance = 0;
-//     int i,j;
-//     for (j = 0; j < numofDOFs; j++){
-//         if(distance < fabs(armstart_anglesV_rad[j] - armgoal_anglesV_rad[j]))
-//             distance = fabs(armstart_anglesV_rad[j] - armgoal_anglesV_rad[j]);
-//     }
-//     int numofsamples = (int)(distance/(PI/20));
-//     if(numofsamples < 2){
-//         printf("The arm is already at the goal\n");
-//         return;
-//     }
-// 	int countNumInvalid = 0;
-//     *plan = (double**) malloc(numofsamples*sizeof(double*));
-//     for (i = 0; i < numofsamples; i++){
-//         (*plan)[i] = (double*) malloc(numofDOFs*sizeof(double)); 
-//         for(j = 0; j < numofDOFs; j++){
-//             (*plan)[i][j] = armstart_anglesV_rad[j] + ((double)(i)/(numofsamples-1))*(armgoal_anglesV_rad[j] - armstart_anglesV_rad[j]);
-//         }
-//         if(!IsValidArmConfiguration((*plan)[i], numofDOFs, map, x_size, y_size)) {
-// 			++countNumInvalid;
-//         }
-//     }
-// 	printf("Linear interpolation collided at %d instances across the path\n", countNumInvalid);
-//     *planlength = numofsamples;
-    
-//     return;
-// }
-
 // RRT Planner
 void plannerRRT(
     double *map,
@@ -78,7 +33,8 @@ void plannerRRT(
     double *armgoal_anglesV_rad,
     int numofDOFs,
     double ***plan,
-    int *planlength)
+    int *planlength,
+    int &vertices)
 {
     const int num_nodes = 1000;
 	double eps = 1.0;
@@ -88,13 +44,7 @@ void plannerRRT(
     std::cout << "Building tree" << std::endl;
     rrt.build_tree(tree, armstart_anglesV_rad, armgoal_anglesV_rad, num_nodes);
 
-    // Ensure start and goal nodes have neighbors
-    // if (tree[num_nodes-1].neighbors.empty()) {
-    //     std::cout << "Start or goal node has no valid connections!" << std::endl;
-    //     *plan = nullptr;
-    //     *planlength = 0;
-    //     return;
-    // }
+    vertices = tree.size();
 
     std::cout << "Running Dijkstra on the tree" << std::endl;
     std::vector<int> shortestPath = rrt.dijkstra(tree, armgoal_anglesV_rad);
@@ -150,7 +100,8 @@ void plannerRRTConnect(
     double *armgoal_anglesV_rad,
     int numofDOFs,
     double ***plan,
-    int *planlength)
+    int *planlength,
+    int &vertices)
 {
     const int num_nodes = 1000;
 	double eps = 1.0;
@@ -159,6 +110,8 @@ void plannerRRTConnect(
 
     std::cout << "Building tree" << std::endl;
     rrt_connect.build_tree(tree_A, tree_B, armstart_anglesV_rad, armgoal_anglesV_rad, num_nodes);
+
+    vertices = tree_A.size() + tree_B.size();
 
     std::cout << "Running Dijkstra on the two trees" << std::endl;
     std::vector<int> shortestPath_A = rrt_connect.dijkstra(tree_A);
@@ -235,7 +188,8 @@ void plannerRRTStar(
     double *armgoal_anglesV_rad,
     int numofDOFs,
     double ***plan,
-    int *planlength)
+    int *planlength,
+    int &vertices)
 {
     const int num_nodes = 1000;
 	double eps = 1.0;
@@ -244,6 +198,8 @@ void plannerRRTStar(
 
     std::cout << "Building tree" << std::endl;
     rrt_star.build_tree(tree, armstart_anglesV_rad, armgoal_anglesV_rad, num_nodes);
+
+    vertices = tree.size();
 
     std::cout << "Reconstructing path from the tree" << std::endl;
     std::vector<int> shortestPath = rrt_star.reconstruct_path(tree);
@@ -298,7 +254,8 @@ void plannerPRM(
     double *armgoal_anglesV_rad,
     int numofDOFs,
     double ***plan,
-    int *planlength)
+    int *planlength,
+    int &vertices)
 {
     const int num_nodes = 1000;
     std::vector<node> graph;
@@ -309,6 +266,8 @@ void plannerPRM(
 
     std::cout << "Querying roadmap with the start and goal nodes" << std::endl;
     prm.query(graph, armstart_anglesV_rad, armgoal_anglesV_rad, num_nodes);
+
+    vertices = graph.size();
 
     // Ensure start and goal nodes have neighbors
     if (graph[num_nodes].neighbors.empty() || graph[num_nodes + 1].neighbors.empty()) {
@@ -377,7 +336,7 @@ void plannerPRM(
  * */
 int main(int argc, char** argv) {
 	double* map;
-	int x_size, y_size;
+	int x_size, y_size, vertices = 0;
 
 	tie(map, x_size, y_size) = loadMap(argv[1]);
 	const int numOfDOFs = std::stoi(argv[2]);
@@ -405,22 +364,22 @@ int main(int argc, char** argv) {
 
 	if (whichPlanner == PRM) {
 		std::cout << "Using PRM" << std::endl;
-        plannerPRM(map, x_size, y_size, startPos, goalPos, numOfDOFs, &plan, &planlength);
+        plannerPRM(map, x_size, y_size, startPos, goalPos, numOfDOFs, &plan, &planlength, vertices);
     }
 
 	else if (whichPlanner == RRT) {
 		std::cout << "Using RRT" << std::endl;
-		plannerRRT(map, x_size, y_size, startPos, goalPos, numOfDOFs, &plan, &planlength);
+		plannerRRT(map, x_size, y_size, startPos, goalPos, numOfDOFs, &plan, &planlength, vertices);
 	}
 
     else if (whichPlanner == RRTCONNECT) {
         std::cout << "Using RRT-Connect" << std::endl;
-        plannerRRTConnect(map, x_size, y_size, startPos, goalPos, numOfDOFs, &plan, &planlength);
+        plannerRRTConnect(map, x_size, y_size, startPos, goalPos, numOfDOFs, &plan, &planlength, vertices);
     }
 
     else if (whichPlanner == RRTSTAR) {
         std::cout << "Using RRT*" << std::endl;
-        plannerRRTStar(map, x_size, y_size, startPos, goalPos, numOfDOFs, &plan, &planlength);
+        plannerRRTStar(map, x_size, y_size, startPos, goalPos, numOfDOFs, &plan, &planlength, vertices);
     }
 
 	else {
@@ -451,4 +410,8 @@ int main(int argc, char** argv) {
 		}
 		m_log_fstream << endl;
 	}
+    std::ofstream m_vertices_fstream;
+	m_vertices_fstream.open("vertices.txt", std::ios::out | std::ios::app);
+    m_vertices_fstream << vertices << endl;
+
 }
