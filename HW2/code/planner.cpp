@@ -96,10 +96,8 @@ void plannerRRT(
     //     return;
     // }
 
-    std::cout << "Running Dijkstra" << std::endl;
+    std::cout << "Running Dijkstra on the tree" << std::endl;
     std::vector<int> shortestPath = rrt.dijkstra(tree, armgoal_anglesV_rad);
-
-	rrt.visualize_tree(tree, "visualization/rrt.dot");
 
     // Check if a valid path was found
     if (shortestPath.empty()) {
@@ -162,27 +160,27 @@ void plannerRRTConnect(
     std::cout << "Building tree" << std::endl;
     rrt_connect.build_tree(tree_A, tree_B, armstart_anglesV_rad, armgoal_anglesV_rad, num_nodes);
 
-    // Ensure start and goal nodes have neighbors
-    // if (tree[num_nodes-1].neighbors.empty()) {
-    //     std::cout << "Start or goal node has no valid connections!" << std::endl;
-    //     *plan = nullptr;
-    //     *planlength = 0;
-    //     return;
-    // }
-
-    std::cout << "Running Dijkstra" << std::endl;
+    std::cout << "Running Dijkstra on the two trees" << std::endl;
     std::vector<int> shortestPath_A = rrt_connect.dijkstra(tree_A);
     std::vector<int> shortestPath_B = rrt_connect.dijkstra(tree_B);
-    shortestPath_B.resize(shortestPath_B.size() - 1);
+
+    if (shortestPath_A.empty() || shortestPath_B.empty()) {
+        std::cerr << "Error: One of the trees failed to find a valid path!" << std::endl;
+        return;
+    }
+
+    int connection_node = shortestPath_A.back();
+
+    // Remove the duplicate connection node from shortestPath_B (if it exists)
+    if (!shortestPath_B.empty() && shortestPath_B.front() == connection_node) {
+        shortestPath_B.erase(shortestPath_B.begin());
+    }
     std::reverse(shortestPath_B.begin(), shortestPath_B.end());
 
     std::vector<int> shortestPath;
     shortestPath.reserve(shortestPath_A.size() + shortestPath_B.size());
     shortestPath.insert(shortestPath.end(), shortestPath_A.begin(), shortestPath_A.end());
     shortestPath.insert(shortestPath.end(), shortestPath_B.begin(), shortestPath_B.end());
-
-	rrt_connect.visualize_tree(tree_A, "visualization/rrt_Connect_A.dot");
-    rrt_connect.visualize_tree(tree_B, "visualization/rrt_Connect_B.dot");
 
     // Check if a valid path was found
     if (shortestPath.empty()) {
@@ -247,18 +245,8 @@ void plannerRRTStar(
     std::cout << "Building tree" << std::endl;
     rrt_star.build_tree(tree, armstart_anglesV_rad, armgoal_anglesV_rad, num_nodes);
 
-    // Ensure start and goal nodes have neighbors
-    // if (tree[num_nodes-1].neighbors.empty()) {
-    //     std::cout << "Start or goal node has no valid connections!" << std::endl;
-    //     *plan = nullptr;
-    //     *planlength = 0;
-    //     return;
-    // }
-
-    std::cout << "Reconstructing path" << std::endl;
+    std::cout << "Reconstructing path from the tree" << std::endl;
     std::vector<int> shortestPath = rrt_star.reconstruct_path(tree);
-
-	rrt_star.visualize_tree(tree, "visualization/rrt_star.dot");
 
     // Check if a valid path was found
     if (shortestPath.empty()) {
@@ -312,14 +300,14 @@ void plannerPRM(
     double ***plan,
     int *planlength)
 {
-    const int num_nodes = 2000;
+    const int num_nodes = 1000;
     std::vector<node> graph;
     PRM_Planner prm(x_size, y_size, numofDOFs, map);
 
     std::cout << "Building roadmap" << std::endl;
     prm.build_roadmap(graph, num_nodes);
 
-    std::cout << "Querying roadmap" << std::endl;
+    std::cout << "Querying roadmap with the start and goal nodes" << std::endl;
     prm.query(graph, armstart_anglesV_rad, armgoal_anglesV_rad, num_nodes);
 
     // Ensure start and goal nodes have neighbors
@@ -330,10 +318,8 @@ void plannerPRM(
         return;
     }
 
-    std::cout << "Running Dijkstra" << std::endl;
+    std::cout << "Running Dijkstra on the roadmap" << std::endl;
     std::vector<int> shortestPath = prm.dijkstra(graph, num_nodes, num_nodes + 1);
-
-	prm.visualize_tree(graph, "visualization/prm.dot");
 
     // Check if a valid path was found
     if (shortestPath.empty()) {

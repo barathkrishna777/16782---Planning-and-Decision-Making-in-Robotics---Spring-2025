@@ -48,30 +48,6 @@ public:
         return n;
     }
 
-    double distance(node &n1, node &n2) {
-        double dist = 0;
-        for (int i = 0; i < n1.angles.size(); ++i) {
-            dist += pow(n1.angles[i] - n2.angles[i], 2);
-        }
-        return sqrt(dist);
-    }
-
-    bool obstacle_free(node n1, node n2) {
-        double dist = distance(n1, n2);
-        int numofsamples = std::max(1, (int)(dist / (PI / 40)));
-
-        std::vector<double> config(numofDOFs);
-        for (int i = 0; i < numofsamples; i++) {
-            for (int j = 0; j < numofDOFs; j++)
-                config[j] = n1.angles[j] + ((double)(i) / (numofsamples - 1)) * (n2.angles[j] - n1.angles[j]);
-    
-            if (!IsValidArmConfiguration(config.data(), numofDOFs, map, x_size, y_size))
-                return false;
-        }
-        
-        return true;
-    }
-
     std::vector<int> find_neighbors(std::vector<node>& graph, int id, int k) {
         std::vector<int> nearest_neighbors;
         if (graph.size() <= 1) {
@@ -101,7 +77,6 @@ public:
     
         while (n < max_nodes) {
             node sample_node = new_node();
-            std::cout << "Sampled node " << n+1 << std::endl;
     
             sample_node.id = n;
             graph.push_back(sample_node);
@@ -113,7 +88,7 @@ public:
             for (int neighbor_id : nearest_neighbor_ids) {
                 node& neighbor_node = graph[neighbor_id];
 
-                if (obstacle_free(graph[id], graph[neighbor_id]) && 
+                if (obstacle_free(graph[id], graph[neighbor_id], numofDOFs, x_size, y_size, map) && 
                     neighbor_node.neighbors.size() < connections) {
 
                     double dist = distance(graph[id], neighbor_node);
@@ -148,7 +123,7 @@ public:
         for (int neighbor_id : init_neighbors) {
             node& neighbor_node = graph[neighbor_id];
 
-            if (obstacle_free(graph[num_nodes], neighbor_node)) {
+            if (obstacle_free(graph[num_nodes], neighbor_node, numofDOFs, x_size, y_size, map)) {
 
                 double dist = distance(graph[num_nodes], neighbor_node);
                 graph[num_nodes].neighbors.emplace_back(neighbor_id, dist);
@@ -163,7 +138,7 @@ public:
         for (int neighbor_id : goal_neighbors) {
             node& neighbor_node = graph[neighbor_id];
 
-            if (obstacle_free(graph[num_nodes + 1], neighbor_node)) {
+            if (obstacle_free(graph[num_nodes + 1], neighbor_node, numofDOFs, x_size, y_size, map)) {
 
                 double dist = distance(graph[num_nodes + 1], neighbor_node);
                 graph[num_nodes + 1].neighbors.emplace_back(neighbor_id, dist);
@@ -221,7 +196,7 @@ public:
     
         // Reconstruct path from goal to start
         std::vector<int> path;
-        for (int at = q_goal_ID; at != -1; at = graph[at].parent) {
+        for (int at = q_goal_ID; at >= 0; at = graph[at].parent) {
             path.push_back(at);
         }
         std::reverse(path.begin(), path.end());
@@ -239,7 +214,7 @@ public:
 
         while (current < path.size() - 1) {
             int next = current + 1;
-            while (next < path.size() - 1 && obstacle_free(graph[path[current]], graph[path[next + 1]])) {
+            while (next < path.size() - 1 && obstacle_free(graph[path[current]], graph[path[next + 1]], numofDOFs, x_size, y_size, map)) {
                 next++;
             }
             shortcut_path.push_back(path[next]);
@@ -248,38 +223,4 @@ public:
 
         return shortcut_path;
     }
-
-    void visualize_tree(const std::vector<node>& graph, const std::string& filename) {
-        std::ofstream ofs(filename);
-        if (!ofs.is_open()) {
-            std::cerr << "Failed to open file for visualization: " << filename << std::endl;
-            return;
-        }
-        ofs << "digraph RRTTree {" << std::endl;
-        // Optionally, label nodes with their ID (and add extra info if desired)
-        for (const auto & n : graph) {
-            ofs << "  node" << n.id << " [label=\"ID:" << n.id;
-            if (n.id == 0)
-                ofs << " (Start)\"";
-            // If the goal node is the last one added, mark it:
-            else if (n.id == graph.back().id)
-                ofs << " (Goal)\"";
-            else
-                ofs << "\"";
-            ofs << "];" << std::endl;
-    
-            // Output edges; here we only output one direction (avoid duplicates)
-            for (const auto & neighbor : n.neighbors) {
-                if (n.id < neighbor.first) {
-                    ofs << "  node" << n.id << " -> node" << neighbor.first 
-                        << " [label=\"" << neighbor.second << "\"];" << std::endl;
-                }
-            }
-        }
-        ofs << "}" << std::endl;
-        ofs.close();
-        std::cout << "Visualization written to " << filename << std::endl;
-    }
-    
-
 };

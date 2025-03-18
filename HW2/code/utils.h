@@ -279,4 +279,28 @@ struct node {
     }
 };
 
+inline double distance(node n1, node n2) {
+	double dist = 0;
+	for (int i = 0; i < n1.angles.size(); ++i) {
+		dist += pow(n1.angles[i] - n2.angles[i], 2);
+	}
+	return sqrt(dist);
+}
+
+bool obstacle_free(node n1, node n2, int numofDOFs, int x_size, int y_size, double* map) {
+	double dist = distance(n1, n2);
+	int numofsamples = std::max(1, (int)(dist / (PI / 20)));
+
+	std::vector<double> config(numofDOFs);
+	for (int i = 0; i < numofsamples; i++) {
+		for (int j = 0; j < numofDOFs; j++)
+			config[j] = n1.angles[j] + ((double)(i) / (numofsamples - 1)) * (n2.angles[j] - n1.angles[j]);
+
+		if (!IsValidArmConfiguration(config.data(), numofDOFs, map, x_size, y_size))
+			return false;
+	}
+	
+	return true;
+}
+
 #endif // UTILS_H

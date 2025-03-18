@@ -56,14 +56,6 @@ public:
         throw std::runtime_error("Failed to find a valid random node.");
     }
 
-    double distance(node& n1, node& n2) {
-        double dist = 0;
-        for (int i = 0; i < n1.angles.size(); ++i) {
-            dist += pow(n1.angles[i] - n2.angles[i], 2);
-        }
-        return sqrt(dist);
-    }
-
     void build_tree(std::vector<node>& tree, double* armstart_anglesV_rad, double* armgoal_anglesV_rad, const int& max_nodes) {
         int n = 0;
         tree.clear();
@@ -80,7 +72,6 @@ public:
     
         while (n < max_nodes) {
             node q_rand = new_node(numofDOFs, armgoal_anglesV_rad);
-            std::cout << "Sampled node " << n << std::endl;
             int status = extend(tree, q_rand, armgoal_anglesV_rad);
     
             if (status == 0)  // Trapped
@@ -175,7 +166,7 @@ public:
         std::vector<std::pair<int, double>> neighbors = find_neighbors(tree, id, r);
 
         for (auto neighbor : neighbors) {
-            if(obstacle_free(tree[id], tree[neighbor.first])) {
+            if(obstacle_free(tree[id], tree[neighbor.first], numofDOFs, x_size, y_size, map)) {
                 double c_new = tree[neighbor.first].g + neighbor.second;
                 if(c_new < tree[id].g) {
                     tree[id].g = c_new;
@@ -184,7 +175,7 @@ public:
             }
         }
         for (auto neighbor : neighbors) {
-            if(neighbor.first != tree[id].parent && obstacle_free(tree[id], tree[neighbor.first])) {
+            if(neighbor.first != tree[id].parent && obstacle_free(tree[id], tree[neighbor.first], numofDOFs, x_size, y_size, map)) {
                 double c_new = tree[id].g + neighbor.second;
                 if (c_new < tree[neighbor.first].g) {
                     tree[neighbor.first].g = c_new;
@@ -192,22 +183,6 @@ public:
                 }
             }
         }
-    }
-
-    bool obstacle_free(node n1, node n2) {
-        double dist = distance(n1, n2);
-        int numofsamples = std::max(1, (int)(dist / (PI / 20)));
-
-        std::vector<double> config(numofDOFs);
-        for (int i = 0; i < numofsamples; i++) {
-            for (int j = 0; j < numofDOFs; j++)
-                config[j] = n1.angles[j] + ((double)(i) / (numofsamples - 1)) * (n2.angles[j] - n1.angles[j]);
-    
-            if (!IsValidArmConfiguration(config.data(), numofDOFs, map, x_size, y_size))
-                return false;
-        }
-        
-        return true;
     }
 
     std::vector<std::pair<int, double>> find_neighbors(std::vector<node>& tree, int id, double r) {
@@ -261,13 +236,12 @@ public:
         }
     
         std::vector<int> path;
-        for (int at = goal_id; at != -1; at = tree[at].parent) {
+        for (int at = goal_id; at >= 0; at = tree[at].parent) {
             path.push_back(at);
         }
         std::reverse(path.begin(), path.end());
 
         double dist = distance(tree[path.back()], n);
-        std::cout << "Distance to goal: " << dist << std::endl;
         n.id = tree.size();
         tree.push_back(n);
         path.push_back(n.id);
@@ -286,7 +260,7 @@ public:
 
         while (current < path.size() - 1) {
             int next = current + 1;
-            while (next < path.size() - 1 && obstacle_free(tree[path[current]], tree[path[next + 1]])) {
+            while (next < path.size() - 1 && obstacle_free(tree[path[current]], tree[path[next + 1]], numofDOFs, x_size, y_size, map)) {
                 next++;
             }
             shortcut_path.push_back(path[next]);
@@ -294,37 +268,5 @@ public:
         }
 
         return shortcut_path;
-    }
-
-    void visualize_tree(const std::vector<node>& tree, const std::string& filename) {
-        std::ofstream ofs(filename);
-        if (!ofs.is_open()) {
-            std::cerr << "Failed to open file for visualization: " << filename << std::endl;
-            return;
-        }
-        ofs << "digraph RRTTree {" << std::endl;
-        // Optionally, label nodes with their ID (and add extra info if desired)
-        for (const auto & n : tree) {
-            ofs << "  node" << n.id << " [label=\"ID:" << n.id;
-            if (n.id == 0)
-                ofs << " (Start)\"";
-            // If the goal node is the last one added, mark it:
-            else if (n.id == tree.back().id)
-                ofs << " (Goal)\"";
-            else
-                ofs << "\"";
-            ofs << "];" << std::endl;
-    
-            // Output edges; here we only output one direction (avoid duplicates)
-            for (const auto & neighbor : n.neighbors) {
-                if (n.id < neighbor.first) {
-                    ofs << "  node" << n.id << " -> node" << neighbor.first 
-                        << " [label=\"" << neighbor.second << "\"];" << std::endl;
-                }
-            }
-        }
-        ofs << "}" << std::endl;
-        ofs.close();
-        std::cout << "Visualization written to " << filename << std::endl;
     }
 };
