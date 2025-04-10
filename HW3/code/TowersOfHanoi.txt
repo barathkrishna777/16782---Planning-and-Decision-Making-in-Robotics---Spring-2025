@@ -1,0 +1,13 @@
+Symbols: Disk1, Disk2, Disk3, PegA, PegB, PegC
+Initial Conditions: Disk(Disk1), Disk(Disk2), Disk(Disk3), Peg(PegA), Peg(PegB), Peg(PegC), On(Disk1, Disk2), On(Disk2, Disk3), On(Disk3, PegA), Clear(Disk1), Clear(PegB), Clear(PegC), Smaller(Disk1, Disk2), Smaller(Disk2, Disk3), Smaller(Disk1, Disk3)
+
+Goal Conditions: On(Disk1, Disk2), On(Disk2, Disk3), On(Disk3, PegC)
+
+Actions:
+        MoveToPeg(d, x, p)
+        Preconditions: Disk(d), Peg(p), Clear(d), Clear(p), On(d, x)
+        Effects: On(d, p), Clear(x), !On(d, x), !Clear(p)
+
+        MoveToDisk(d, x, target)
+        Preconditions: Disk(d), Disk(target), Clear(d), Clear(target), Smaller(d, target), On(d, x)
+        Effects: On(d, target), Clear(x), !On(d, x), !Clear(target)
